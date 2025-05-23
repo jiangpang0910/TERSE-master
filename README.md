@@ -1,7 +1,7 @@
+# [KDD 2025] Temporal Restoration and Spatial Rewiring for Source-Free Multivariate Time Series Domain Adaptation
+#### *by: Peiliang Gong, Yucheng Wang, Min Wu, Zhenghua Chen, Xiaoli Li, Daoqiang Zhang* <br/> 
 
-***This code is for KDD25 anonymous review only. All copyrights are owned by the authors.***
-
-### Temporal Restoration and Spatial Rewiring for Source-Free Multivariate Time Series Domain Adaptation.
+## Accepted in the [31st SIGKDD Conference on Knowledge Discovery and Data Mining - Research Track](https://kdd2025.kdd.org).
 
 #### Requirements:
 einops==0.7.0  
@@ -31,3 +31,15 @@ python trainers/train.py --run_description demo --da_method TERSE --dataset HAR 
 
 #### Results:
 At the end of all runs, the overall average and standard deviation results will be saved in the `save_dir` directory.
+
+## Citation
+If you found this work useful for you, please consider citing it.
+
+```
+@inproceedings{terse,
+  author = {Gong, Peiliang and Wang, Yucheng and Wu, Min and Chen, Zhenghua and Li, Xiaoli and Zhang, Daoqiang},
+  title = {Temporal Restoration and Spatial Rewiring for Source-Free Multivariate Time Series Domain Adaptation},
+  booktitle={31st SIGKDD Conference on Knowledge Discovery and Data Mining - Research Track},
+  year = {2025}
+}
+```
