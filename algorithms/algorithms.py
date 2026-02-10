@@ -115,7 +115,7 @@ class TERSE(Algorithm):
                 self.pre_optimizer.step()
                 self.recover_optimizer.step()
 
-                losses = {'cls_loss': src_cls_loss.detach().item(), 'tov_loss': tov_loss.detach().item(), 'graph_masking_loss': graph_recover_loss.detach().item()}
+                losses = {'cls_loss': _loss.detach().item(), 'tov_loss': tov_loss.detach().item(), 'graph_masking_loss': graph_recover_loss.detach().item()}
                 # acculate loss
                 for key, val in losses.items():
                     avg_meter[key].update(val, 32)
