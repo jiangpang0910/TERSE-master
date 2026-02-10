@@ -53,10 +53,12 @@ class AbstractTrainer(object):
         self.hparams = {**self.hparams_class.alg_hparams[self.da_method], **self.hparams_class.train_params}
 
         # metrics
+        self.task = getattr(self.dataset_configs, 'task', 'classification')
         self.num_classes = self.dataset_configs.num_classes
-        self.ACC = Accuracy(task="multiclass", num_classes=self.num_classes)
-        self.F1 = F1Score(task="multiclass", num_classes=self.num_classes, average="macro")
-        self.AUROC = AUROC(task="multiclass", num_classes=self.num_classes)        
+        if self.task != "regression":
+            self.ACC = Accuracy(task="multiclass", num_classes=self.num_classes)
+            self.F1 = F1Score(task="multiclass", num_classes=self.num_classes, average="macro")
+            self.AUROC = AUROC(task="multiclass", num_classes=self.num_classes)
 
     def sweep(self):
         # sweep configurations
@@ -99,14 +101,20 @@ class AbstractTrainer(object):
         with torch.no_grad():
             for data, labels,_ in test_loader:
                 data = data.float().to(self.device)
-                labels = labels.view((-1)).long().to(self.device)
+                if self.task == "regression":
+                    labels = labels.view((-1)).float().to(self.device)
+                else:
+                    labels = labels.view((-1)).long().to(self.device)
 
                 # forward pass
                 spat_feat, features = feature_extractor(data)
 
                 predictions = classifier(features)
                 # compute loss
-                loss = F.cross_entropy(predictions, labels)
+                if self.task == "regression":
+                    loss = F.mse_loss(predictions, labels)
+                else:
+                    loss = F.cross_entropy(predictions, labels)
                 total_loss.append(loss.item())
                 pred = predictions.detach()  # .argmax(dim=1)  # get the index of the max log-probability
 
@@ -142,14 +150,22 @@ class AbstractTrainer(object):
         trg_risk = self.loss.item()
 
         # calculate metrics
-        acc = self.ACC(self.full_preds.argmax(dim=1).cpu(), self.full_labels.cpu()).item()
-        # f1_torch
-        f1 = self.F1(self.full_preds.argmax(dim=1).cpu(), self.full_labels.cpu()).item()
-        auroc = self.AUROC(self.full_preds.cpu(), self.full_labels.cpu()).item()
+        if self.task == "regression":
+            preds = self.full_preds.cpu()
+            labels = self.full_labels.cpu()
+            mse = F.mse_loss(preds, labels).item()
+            mae = F.l1_loss(preds, labels).item()
+            ss_res = ((labels - preds) ** 2).sum()
+            ss_tot = ((labels - labels.mean()) ** 2).sum()
+            r2 = (1 - ss_res / ss_tot).item() if ss_tot > 0 else 0.0
+            metrics = mse, mae, r2
+        else:
+            acc = self.ACC(self.full_preds.argmax(dim=1).cpu(), self.full_labels.cpu()).item()
+            f1 = self.F1(self.full_preds.argmax(dim=1).cpu(), self.full_labels.cpu()).item()
+            auroc = self.AUROC(self.full_preds.cpu(), self.full_labels.cpu()).item()
+            metrics = acc, f1, auroc
 
         risks = src_risk, trg_risk
-        metrics = acc, f1, auroc
-
         return risks, metrics
 
     def save_tables_to_file(self,table_results, name):
@@ -187,16 +203,21 @@ class AbstractTrainer(object):
         wandb.log({'hparams': wandb.Table(dataframe=pd.DataFrame(dict(self.hparams).items(), columns=['parameter', 'value']), allow_mixed_types=True)})
 
     def calculate_metrics(self):
-       
         self.evaluate(self.trg_test_dl)
-        # accuracy  
-        acc = self.ACC(self.full_preds.argmax(dim=1).cpu(), self.full_labels.cpu()).item()
-        # f1
-        f1 = self.F1(self.full_preds.argmax(dim=1).cpu(), self.full_labels.cpu()).item()
-        # auroc 
-        auroc = self.AUROC(self.full_preds.cpu(), self.full_labels.cpu()).item()
-
-        return acc, f1, auroc
+        if self.task == "regression":
+            preds = self.full_preds.cpu()
+            labels = self.full_labels.cpu()
+            mse = F.mse_loss(preds, labels).item()
+            mae = F.l1_loss(preds, labels).item()
+            ss_res = ((labels - preds) ** 2).sum()
+            ss_tot = ((labels - labels.mean()) ** 2).sum()
+            r2 = (1 - ss_res / ss_tot).item() if ss_tot > 0 else 0.0
+            return mse, mae, r2
+        else:
+            acc = self.ACC(self.full_preds.argmax(dim=1).cpu(), self.full_labels.cpu()).item()
+            f1 = self.F1(self.full_preds.argmax(dim=1).cpu(), self.full_labels.cpu()).item()
+            auroc = self.AUROC(self.full_preds.cpu(), self.full_labels.cpu()).item()
+            return acc, f1, auroc
 
     def calculate_risks(self):
          # calculation based source test data

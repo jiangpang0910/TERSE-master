@@ -76,6 +76,7 @@ class TERSE(Algorithm):
         self.lr_scheduler = StepLR(self.optimizer, step_size=hparams['step_size'], gamma=hparams['lr_decay'])
         self.cross_entropy = CrossEntropyLabelSmooth(self.configs.num_classes, device, epsilon=0.1)
         self.mse_loss = nn.MSELoss()
+        self.regression_loss = nn.MSELoss()  # separate MSE for regression task supervised loss
 
     def pretrain(self, src_dataloader, avg_meter, logger):
         for epoch in range(1, self.hparams["num_epochs"] + 1):
@@ -181,15 +182,19 @@ class TERSE(Algorithm):
                 trg_recovered_graph = self.graph_recover(masked_adj_feats, masked_adj)
                 graph_recover_loss = self.mse_loss(trg_recovered_graph, trg_adj)
 
-                # 7. supervised loss
+                # 7. prediction scores
+                trg_pred = self.classifier(trg_flat)
 
                 if getattr(self.configs, 'task', 'classification') == 'regression':
-                    trg_cls_loss = self.regression_loss(trg_pred, trg_y)
+                    # Regression: no entropy/IM loss (those require class probabilities)
+                    # Only self-supervised adaptation losses
+                    loss = self.hparams['tov_wt'] * tov_loss + self.hparams['graph_recover_wt'] * graph_recover_loss
                 else:
+                    # Classification: entropy minimization + information maximization
                     trg_prob = nn.Softmax(dim=1)(trg_pred)
                     trg_ent = self.hparams['ent_loss_wt'] * torch.mean(EntropyLoss(trg_prob))
                     trg_ent -= self.hparams['im'] * torch.sum(
-                    -trg_prob.mean(dim=0) * torch.log(trg_prob.mean(dim=0) + 1e-5))
+                        -trg_prob.mean(dim=0) * torch.log(trg_prob.mean(dim=0) + 1e-5))
                     loss = trg_ent + self.hparams['tov_wt'] * tov_loss + self.hparams['graph_recover_wt'] * graph_recover_loss
 
                 loss.backward()

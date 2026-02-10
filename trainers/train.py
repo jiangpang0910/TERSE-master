@@ -36,7 +36,10 @@ class Trainer(AbstractTrainer):
     def train(self):
 
         # table with metrics
-        results_columns = ["scenario", "run", "acc", "f1_score", "auroc"]
+        if getattr(self.dataset_configs, 'task', 'classification') == 'regression':
+            results_columns = ["scenario", "run", "mse", "mae", "r2"]
+        else:
+            results_columns = ["scenario", "run", "acc", "f1_score", "auroc"]
         table_results = pd.DataFrame(columns=results_columns)
 
         # table with risks
