@@ -1,0 +1,22 @@
+# Python cache
+__pycache__/
+*.pyc
+
+# Data files (too large for git - regenerate with preprocess_HAR.py)
+data/HAR/train/*.txt
+data/HAR/test/*.txt
+data/HAR/train/Inertial Signals/
+data/HAR/test/Inertial Signals/
+data/HAR/*.pt
+data/sense42_raw_eeg_extracted_rawonly/
+
+# Experiment logs
+experiments_logs/
+
+# Virtual environments
+venv/
+.venv/
+
+# IDE
+.idea/
+.vscode/

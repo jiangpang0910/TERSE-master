@@ -92,7 +92,7 @@ if __name__ == "__main__":
     parser.add_argument('--da_method', default='TERSE', type=str, help='Methods Settings.')
 
     # ========= Select the DATASET ==============
-    parser.add_argument('--data_path', default=r'/Datasets', type=str, help='Path containing dataset')
+    parser.add_argument('--data_path', default=r'./data', type=str, help='Path containing dataset')
     parser.add_argument('--dataset', default='HAR', type=str, help='Dataset Settings, such as HAR.')
 
     # ========= Select the BACKBONE ==============
@@ -100,7 +100,7 @@ if __name__ == "__main__":
 
     # ========= Experiment settings ===============
     parser.add_argument('--num_runs', default=3, type=int, help='Number of consecutive run with different seeds')
-    parser.add_argument('--device', default="cuda", type=str, help='cpu or cuda')
+    parser.add_argument('--device', default="cpu", type=str, help='cpu or cuda')
     parser.add_argument('--gpu_id', default=0, type=str, help='gpu id.')
 
     args = parser.parse_args()

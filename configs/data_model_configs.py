@@ -146,3 +146,5 @@ class WISDM(object):
         self.dropout_spatial_gnn = 0.2
         self.dropout_graph_recover = 0.2
         self.num_splits = 8
+
+
