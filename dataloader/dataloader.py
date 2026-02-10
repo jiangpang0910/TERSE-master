@@ -36,7 +36,24 @@ class Load_Dataset(Dataset):
             self.transform = transforms.Normalize(mean=data_mean, std=data_std)
 
         self.x_data = x_data.float()
-        self.y_data = y_data.long() if y_data is not None else None
+        
+        if y_data is not None:
+            task = getattr(dataset_configs, 'task', 'classification')
+            if task == "regression":
+                self.y_data = y_data.float()
+            elif task == "classification" and hasattr(dataset_configs, 'label_thresholds'):
+                # Discretize raw continuous scores using thresholds
+                thresholds = dataset_configs.label_thresholds
+                labels = torch.zeros(y_data.shape[0], dtype=torch.long)
+                labels[y_data >= thresholds[0]] = 1
+                labels[y_data >= thresholds[1]] = 2
+                self.y_data = labels
+            else:
+                # Default: labels are already integer class indices (e.g., HAR, WISDM)
+                self.y_data = y_data.long()
+        else:
+            self.y_data = None  
+
         self.len = x_data.shape[0]
 
     def __getitem__(self, index):

@@ -173,6 +173,9 @@ class SENSE_42():
         self.dropout = 0.3
         self.num_classes = 3      # low / medium / high workload
 
+        self.task = "classification"
+        self.label_thresholds = [30, 50]
+
         # CNN features
         self.mid_channels = 16
         self.final_out_channels = 32
@@ -198,4 +201,18 @@ class SENSE_42():
         self.DSKN_disc_hid = 128
         self.hidden_dim = 256
 
+
+class SENSE_42_REG(SENSE_42):
+    """
+    SENSE-42 EEG Workload dataset -- REGRESSION variant.
+    Predicts continuous NASA-TLX score (1-100) instead of discrete classes.
+    Inherits all architecture settings from SENSE_42.
+    """
+    def __init__(self):
+        super(SENSE_42_REG, self).__init__()
+        self.task = "regression"
+        self.output_dim = 1
+        self.num_classes = 1  # single scalar output (for compatibility)
+        self.class_names = ['nasa_tlx_score']
+        self.label_thresholds = [30, 50]  # used by classification variant
 

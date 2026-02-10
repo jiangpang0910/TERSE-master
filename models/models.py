@@ -163,6 +163,23 @@ class Classifier(nn.Module):
         return predictions
 
 # Spatial Rewiring
+
+# Regressor (for continuous output like NASA-TLX scores)
+class Regressor(nn.Module):
+    def __init__(self, configs):
+        super(Regressor, self).__init__()
+        model_output_dim = configs.gnn_output_dim
+        input_dim = model_output_dim * configs.input_channels  # 64 * 32 = 2048 for SENSE_42
+        self.head = nn.Sequential(
+            nn.Linear(input_dim, 128),
+            nn.ReLU(),
+            nn.Dropout(configs.dropout),
+            nn.Linear(128, 1)
+        )
+
+    def forward(self, x):
+        return self.head(x).squeeze(-1)  # shape: (batch,) not (batch, 1)
+
 class GraphRecover_new(nn.Module):
     def __init__(self, configs):
         super(GraphRecover_new, self).__init__()

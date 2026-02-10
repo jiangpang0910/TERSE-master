@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
-from models.models import Classifier, Temporal_Imputer
+from models.models import Classifier, Regressor, Temporal_Imputer
 from models.models import masking2, mask_adj_matrices_edges, GraphRecover_new
 from models.loss import CrossEntropyLabelSmooth, EntropyLoss
 from scipy.spatial.distance import cdist
@@ -41,7 +41,11 @@ class TERSE(Algorithm):
         # backbone:
         self.feature_extractor = backbone(configs)
         # classifier:
-        self.classifier = Classifier(configs)
+               # Use Regressor or Classifier based on task
+        if getattr(configs, 'task', 'classification') == 'regression':
+            self.classifier = Regressor(configs)
+        else:
+            self.classifier = Classifier(configs)
         # entire network:
         self.network = nn.Sequential(self.feature_extractor, self.classifier)
 
@@ -77,7 +81,11 @@ class TERSE(Algorithm):
         for epoch in range(1, self.hparams["num_epochs"] + 1):
             for step, (src_x, src_y, _) in enumerate(src_dataloader):
                 # input src data
-                src_x, src_y = src_x.float().to(self.device), src_y.long().to(self.device)
+                src_x = src_x.float().to(self.device)
+                if getattr(self.configs, 'task', 'classification') == 'regression':
+                    src_y = src_y.float().to(self.device)
+                else:
+                    src_y = src_y.long().to(self.device)
 
                 # optimizer zero_grad:
                 self.pre_optimizer.zero_grad()
@@ -106,7 +114,11 @@ class TERSE(Algorithm):
                 src_pred = self.classifier(src_flat)
 
                 # 8. normal cross entropy
-                src_cls_loss = self.cross_entropy(src_pred, src_y)
+                # 8. supervised loss
+                if getattr(self.configs, 'task', 'classification') == 'regression':
+                    src_cls_loss = self.regression_loss(src_pred, src_y)
+                else:
+                    src_cls_loss = self.cross_entropy(src_pred, src_y)
 
                 # 9. total loss.
                 total_loss = src_cls_loss + tov_loss + graph_recover_loss
@@ -169,29 +181,24 @@ class TERSE(Algorithm):
                 trg_recovered_graph = self.graph_recover(masked_adj_feats, masked_adj)
                 graph_recover_loss = self.mse_loss(trg_recovered_graph, trg_adj)
 
-                # 7. prediction scores
-                trg_pred = self.classifier(trg_flat)
+                # 7. supervised loss
 
-                # select evidential vs softmax probabilities
-                trg_prob = nn.Softmax(dim=1)(trg_pred)
-
-                # Entropy loss
-                trg_ent = self.hparams['ent_loss_wt'] * torch.mean(EntropyLoss(trg_prob))
-
-                # IM loss
-                trg_ent -= self.hparams['im'] * torch.sum(
+                if getattr(self.configs, 'task', 'classification') == 'regression':
+                    trg_cls_loss = self.regression_loss(trg_pred, trg_y)
+                else:
+                    trg_prob = nn.Softmax(dim=1)(trg_pred)
+                    trg_ent = self.hparams['ent_loss_wt'] * torch.mean(EntropyLoss(trg_prob))
+                    trg_ent -= self.hparams['im'] * torch.sum(
                     -trg_prob.mean(dim=0) * torch.log(trg_prob.mean(dim=0) + 1e-5))
-
-                '''
-                Overall objective loss
-                '''
-                # removing trg ent
-                loss = trg_ent + self.hparams['tov_wt'] * tov_loss + self.hparams['graph_recover_wt'] * graph_recover_loss
+                    loss = trg_ent + self.hparams['tov_wt'] * tov_loss + self.hparams['graph_recover_wt'] * graph_recover_loss
 
                 loss.backward()
                 self.optimizer.step()
 
-                losses = {'entropy_loss': trg_ent.detach().item(), 'tov_loss': tov_loss.detach().item(), 'graph_masking_loss': graph_recover_loss.detach().item()}
+                if getattr(self.configs, 'task', 'classification') == 'regression':
+                    losses = {'tov_loss': tov_loss.detach().item(), 'graph_masking_loss': graph_recover_loss.detach().item()}
+                else:
+                    losses = {'entropy_loss': trg_ent.detach().item(), 'tov_loss': tov_loss.detach().item(), 'graph_masking_loss': graph_recover_loss.detach().item()}
                 for key, val in losses.items():
                     avg_meter[key].update(val, 32)
 

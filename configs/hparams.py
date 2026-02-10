@@ -67,3 +67,9 @@ class SENSE_42():
                 'gmask_ratio': 0.5
             }
         }
+
+class SENSE_42_REG(SENSE_42):
+    """Hyperparameters for SENSE_42 regression variant."""
+    def __init__(self):
+        super(SENSE_42_REG, self).__init__()
+

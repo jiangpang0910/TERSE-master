@@ -51,7 +51,10 @@ class TargetTest(AbstractTrainer):
 
     def scenario_test(self):
         # Define columns for results tables
-        results_columns = ["scenario", "run", "acc", "f1_score", "auroc"]
+        if self.task == "regression":
+            results_columns = ["scenario", "run", "mse", "mae", "r2"]
+        else:
+            results_columns = ["scenario", "run", "acc", "f1_score", "auroc"]
 
         # Initialize results tables
         last_results = pd.DataFrame(columns=results_columns)
@@ -109,14 +112,21 @@ class TargetTest(AbstractTrainer):
         with torch.no_grad():
             for data, labels, _ in self.trg_test_dl:
                 data = data.float().to(self.device)
-                labels = labels.view((-1)).long().to(self.device)
+                if self.task == "regression":
+                    labels = labels.view((-1)).float().to(self.device)
+                else:
+                    labels = labels.view((-1)).long().to(self.device)
 
                 # forward pass
                 spat_feats, feats = feature_extractor(data)
                 predictions = classifier(feats)
 
                 # compute loss
-                loss = F.cross_entropy(predictions, labels)
+                # compute loss
+                if self.task == "regression":
+                    loss = F.mse_loss(predictions, labels)
+                else:
+                    loss = F.cross_entropy(predictions, labels)
                 total_loss.append(loss.item())
                 pred = predictions.detach()  # .argmax(dim=1)  # get the index of the max log-probability
 
@@ -128,14 +138,21 @@ class TargetTest(AbstractTrainer):
         self.full_preds = torch.cat(preds_list)
         self.full_labels = torch.cat(labels_list)
 
-        # accuracy
-        acc = self.ACC(self.full_preds.argmax(dim=1).cpu(), self.full_labels.cpu()).item()
-        # f1
-        f1 = self.F1(self.full_preds.argmax(dim=1).cpu(), self.full_labels.cpu()).item()
-        # auroc
-        auroc = self.AUROC(self.full_preds.cpu(), self.full_labels.cpu()).item()
-
-        return acc, f1, auroc
+        if self.task == "regression":
+            preds = self.full_preds.cpu()
+            labels = self.full_labels.cpu()
+            mse = F.mse_loss(preds, labels).item()
+            mae = F.l1_loss(preds, labels).item()
+            ss_res = ((labels - preds) ** 2).sum()
+            ss_tot = ((labels - labels.mean()) ** 2).sum()
+            r2 = (1 - ss_res / ss_tot).item() if ss_tot > 0 else 0.0
+            return mse, mae, r2
+            
+        else:
+            acc = self.ACC(self.full_preds.argmax(dim=1).cpu(), self.full_labels.cpu()).item()
+            f1 = self.F1(self.full_preds.argmax(dim=1).cpu(), self.full_labels.cpu()).item()
+            auroc = self.AUROC(self.full_preds.cpu(), self.full_labels.cpu()).item()
+            return acc, f1, auroc
 
 
 if __name__ == "__main__":
