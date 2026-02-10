@@ -148,3 +148,54 @@ class WISDM(object):
         self.num_splits = 8
 
 
+class SENSE_42():
+    """
+    SENSE-42 EEG Workload dataset.
+    32-channel EEG at 1024 Hz, NASA-TLX workload labels discretized into 3 classes.
+    Domain adaptation is performed across participants.
+    """
+    def __init__(self):
+        super(SENSE_42, self).__init__()
+        # Domain adaptation scenarios: (source_participant, target_participant)
+        self.scenarios = [("1", "10"), ("2", "8"), ("3", "5"), ("4", "9"), ("6", "11")]
+
+        self.class_names = ['low', 'medium', 'high']
+        self.sequence_len = 512   # ~0.5s windows at 1024 Hz (good for EEG workload)
+        self.shuffle = True
+        self.drop_last = False
+        self.normalize = True
+        self.adj_norm = True
+
+        # model configs
+        self.input_channels = 32  # 32 EEG channels
+        self.kernel_size = 25     # ~24ms at 1024 Hz (captures EEG waveform features)
+        self.stride = 6
+        self.dropout = 0.3
+        self.num_classes = 3      # low / medium / high workload
+
+        # CNN features
+        self.mid_channels = 16
+        self.final_out_channels = 32
+        self.features_len = 1
+        self.AR_hid_dim = 32
+        self.AR_hid_dim_raw = 32
+
+        # new added (GNN / spatial)
+        self.final_channels = 32
+        self.gnn_input_dim = 32
+        self.gnn_output_dim = 64
+        self.dropout_spatial_gnn = 0.3
+        self.dropout_graph_recover = 0.3
+        self.num_splits = 8
+
+        # lstm features
+        self.lstm_hid = 64
+        self.lstm_n_layers = 1
+        self.lstm_bid = False
+
+        # discriminator
+        self.disc_hid_dim = 64
+        self.DSKN_disc_hid = 128
+        self.hidden_dim = 256
+
+

@@ -45,3 +45,25 @@ class WISDM():
         self.alg_hparams = {
             'TERSE': {'pre_learning_rate': 0.003, 'learning_rate': 0.0003, 'tov_wt': 0.7, 'ent_loss_wt': 0.8528, 'im': 0.589, 'graph_recover_wt': 0.6, 'gmask_ratio': 0.5}
         }
+
+class SENSE_42():
+    def __init__(self):
+        super(SENSE_42, self).__init__()
+        self.train_params = {
+            'num_epochs': 60,
+            'batch_size': 32,
+            'weight_decay': 1e-4,
+            'step_size': 50,
+            'lr_decay': 0.5
+        }
+        self.alg_hparams = {
+            'TERSE': {
+                'pre_learning_rate': 0.001,
+                'learning_rate': 0.0001,
+                'tov_wt': 0.8,
+                'ent_loss_wt': 0.5,
+                'im': 0.8,
+                'graph_recover_wt': 0.5,
+                'gmask_ratio': 0.5
+            }
+        }
