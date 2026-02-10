@@ -10,3 +10,5 @@ torchmetrics>=1.2.1
 torchvision>=0.16.0
 tqdm>=4.66.2
 wandb>=0.16.5
+scikit-learn>=1.6.1
+skorch>=0.15.0
