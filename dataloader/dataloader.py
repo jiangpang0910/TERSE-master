@@ -38,7 +38,7 @@ class Load_Dataset(Dataset):
         self.x_data = x_data.float()
         
         if y_data is not None:
-            task = getattr(dataset_configs, 'task', 'classification')
+            task = getattr(dataset_configs, 'task', 'regression')
             if task == "regression":
                 self.y_data = y_data.float()
             elif task == "classification" and hasattr(dataset_configs, 'label_thresholds'):
@@ -88,3 +88,5 @@ def data_generator(data_path, domain_id, dataset_configs, hparams, dtype):
                                               num_workers=0)
 
     return data_loader
+
+    
