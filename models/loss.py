@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 
+
 class CrossEntropyLabelSmooth(nn.Module):
     def __init__(self, num_classes, device, epsilon=0.1):
         super(CrossEntropyLabelSmooth, self).__init__()
@@ -16,6 +17,14 @@ class CrossEntropyLabelSmooth(nn.Module):
         loss = (- targets * log_probs).mean(0).sum()
 
         return loss
+
+class RegressorLoss(nn.Module):
+    def __init__(self):
+        super(RegressorLoss, self).__init__()
+        self.mse_loss = nn.MSELoss()
+
+    def forward(self, inputs, targets):
+        return self.mse_loss(inputs, targets)
 
 def EntropyLoss(input_):
     mask = input_.ge(0.0000001)
