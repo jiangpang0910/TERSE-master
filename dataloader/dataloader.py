@@ -38,10 +38,10 @@ class Load_Dataset(Dataset):
         self.x_data = x_data.float()
         
         if y_data is not None:
-            print(getattr(dataset_configs, 'task'))
             task = getattr(dataset_configs, 'task', 'regression')
             if task == "regression":
                 self.y_data = y_data.float()
+                print("y_data:", self.y_data)
             elif task == "classification" and hasattr(dataset_configs, 'label_thresholds'):
                 # Discretize raw continuous scores using thresholds
                 thresholds = dataset_configs.label_thresholds
