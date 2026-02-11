@@ -77,7 +77,7 @@ class TERSE(Algorithm):
         self.lr_scheduler = StepLR(self.optimizer, step_size=hparams['step_size'], gamma=hparams['lr_decay'])
         self.cross_entropy = CrossEntropyLabelSmooth(self.configs.num_classes, device, epsilon=0.1)
         self.mse_loss = nn.MSELoss()
-        self.regression_loss = nn.MSELoss()  # separate MSE for regression task supervised loss
+        self.regression_loss = RegressorLoss()  # separate MSE for regression task supervised loss
 
     def pretrain(self, src_dataloader, avg_meter, logger):
         for epoch in range(1, self.hparams["num_epochs"] + 1):
@@ -118,18 +118,18 @@ class TERSE(Algorithm):
                 # 8. normal cross entropy
                 # 8. supervised loss
                 if getattr(self.configs, 'task', 'classification') == 'regression':
-                    src_cls_loss = self.regression_loss(src_pred, src_y)
+                    src_loss = self.regression_loss(src_pred, src_y)
                 else:
-                    src_cls_loss = self.cross_entropy(src_pred, src_y)
+                    src_loss = self.cross_entropy(src_pred, src_y)
 
                 # 9. total loss.
-                total_loss = src_cls_loss + tov_loss + graph_recover_loss
+                total_loss = src_loss + tov_loss + graph_recover_loss
 
                 total_loss.backward()
                 self.pre_optimizer.step()
                 self.recover_optimizer.step()
 
-                losses = {'cls_loss': src_cls_loss.detach().item(), 'tov_loss': tov_loss.detach().item(), 'graph_masking_loss': graph_recover_loss.detach().item()}
+                losses = {'src_loss': src_loss.detach().item(), 'tov_loss': tov_loss.detach().item(), 'graph_masking_loss': graph_recover_loss.detach().item()}
                 # acculate loss
                 for key, val in losses.items():
                     avg_meter[key].update(val, 32)
@@ -145,7 +145,7 @@ class TERSE(Algorithm):
 
     def update(self, trg_dataloader, avg_meter, logger):
         # defining best and last model
-        best_src_risk = float('inf')
+        best_adapt_risk = float('inf')
         best_model = self.network.state_dict()
         last_model = self.network.state_dict()
 
@@ -210,11 +210,13 @@ class TERSE(Algorithm):
 
             self.lr_scheduler.step()
 
-            # saving the best model based on src risk
-            if (epoch + 1) % 10 == 0 and avg_meter['Src_cls_loss'].avg < best_src_risk:
-                best_src_risk = avg_meter['Src_cls_loss'].avg
+            # saving the best model based on lowest adaptation loss
+            adapt_loss = avg_meter['tov_loss'].avg + avg_meter['graph_masking_loss'].avg
+            if (epoch + 1) % 10 == 0 and adapt_loss < best_adapt_loss:
+                best_adapt_loss = adapt_loss
                 best_model = deepcopy(self.network.state_dict())
 
+        
             logger.debug(f'[Epoch : {epoch}/{self.hparams["num_epochs"]}]')
             for key, val in avg_meter.items():
                 logger.debug(f'{key}\t: {val.avg:2.4f}')
