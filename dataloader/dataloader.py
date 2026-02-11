@@ -38,6 +38,7 @@ class Load_Dataset(Dataset):
         self.x_data = x_data.float()
         
         if y_data is not None:
+            print(getattr(dataset_configs, 'task'))
             task = getattr(dataset_configs, 'task', 'regression')
             if task == "regression":
                 self.y_data = y_data.float()
