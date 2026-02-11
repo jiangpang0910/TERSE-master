@@ -35,8 +35,10 @@ class AbstractTrainer(object):
         self.run_description = args.run_description if args.run_description is not None else args.da_method
         self.experiment_description = args.dataset
 
-        # paths
-        self.home_path = os.path.dirname(os.getcwd())
+        # paths — use script location so logs always go to project_root/experiments_logs
+        # regardless of cwd (e.g. when running on server from different directory)
+        _trainers_dir = os.path.dirname(os.path.abspath(__file__))
+        self.home_path = os.path.dirname(_trainers_dir)
         self.save_dir = args.save_dir
         self.data_path = os.path.join(args.data_path, self.dataset)
 
@@ -178,7 +180,7 @@ class AbstractTrainer(object):
             "last": last_model,
             "best": best_model
         }
-        # save classification report
+        # save report
         save_path = os.path.join(home_path, log_dir, f"checkpoint.pt")
         torch.save(save_dict, save_path)
 
