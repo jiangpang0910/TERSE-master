@@ -45,8 +45,8 @@ SAMPLING_RATE = 1024  # Hz
 
 # Workload label discretization thresholds
 # NASA-TLX scores: 0-100 → 3 classes
-LOW_THRESHOLD = 33.33       # 0 - 33.33 → class 0 (low)
-HIGH_THRESHOLD = 66.67      # 66.67 - 100 → class 2 (high)
+LOW_THRESHOLD = 30       # 0 - 33.33 → class 0 (low)
+HIGH_THRESHOLD = 50      # 66.67 - 100 → class 2 (high)
                             # 33.33 - 66.67 → class 1 (medium)
 
 TRAIN_TEST_SPLIT_RATIO = 0.8
@@ -146,7 +146,7 @@ def load_real_data(window_size, step_size):
             stats['skipped_no_label'] += 1
             continue
 
-        label_class = discretize_label(score)
+        label_class = score # instead of discretizing the label, we use the raw score
 
         # Read the parquet EEG data
         parquet_path = os.path.join(RAW_DATA_DIR, pf)
@@ -198,7 +198,7 @@ def generate_synthetic_data(num_participants=12, segments_per_participant=25,
         for seg_idx in range(segments_per_participant):
             # Random workload level for this segment
             score = rng.uniform(0, 80)  # NASA-TLX score
-            label_class = discretize_label(score)
+            label_class = score # instead of discretizing the label, we use the raw score
 
             # Generate multi-channel EEG signal
             t = np.arange(samples_per_segment) / SAMPLING_RATE
@@ -285,11 +285,11 @@ def save_participant_data(participant_data, output_dir, window_size):
 
         train_data = {
             "samples": torch.from_numpy(all_windows[train_idx]).float(),
-            "labels": torch.from_numpy(all_labels[train_idx]).long(),
+            "labels": torch.from_numpy(all_labels[train_idx]).float(),
         }
         test_data = {
             "samples": torch.from_numpy(all_windows[test_idx]).float(),
-            "labels": torch.from_numpy(all_labels[test_idx]).long(),
+            "labels": torch.from_numpy(all_labels[test_idx]).float(),
         }
 
         # Save .pt files

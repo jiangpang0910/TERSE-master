@@ -4,7 +4,7 @@ import torch.nn.functional as F
 import numpy as np
 from models.models import Classifier, Regressor, Temporal_Imputer
 from models.models import masking2, mask_adj_matrices_edges, GraphRecover_new
-from models.loss import CrossEntropyLabelSmooth, EntropyLoss
+from models.loss import CrossEntropyLabelSmooth, EntropyLoss, RegressorLoss
 from scipy.spatial.distance import cdist
 from torch.optim.lr_scheduler import StepLR
 from copy import deepcopy
@@ -27,6 +27,7 @@ class Algorithm(torch.nn.Module):
         super(Algorithm, self).__init__()
         self.configs = configs
         self.cross_entropy = nn.CrossEntropyLoss()
+        self.regression_loss = nn.MSELoss()
 
     def update(self, *args, **kwargs):
         raise NotImplementedError
