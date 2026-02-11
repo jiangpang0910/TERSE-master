@@ -146,12 +146,16 @@ class TargetTest(AbstractTrainer):
             ss_res = ((labels - preds) ** 2).sum()
             ss_tot = ((labels - labels.mean()) ** 2).sum()
             r2 = (1 - ss_res / ss_tot).item() if ss_tot > 0 else 0.0
+            print("Preds:", preds.numpy())
+            print("Labels:", labels.numy())
             return mse, mae, r2
             
         else:
             acc = self.ACC(self.full_preds.argmax(dim=1).cpu(), self.full_labels.cpu()).item()
             f1 = self.F1(self.full_preds.argmax(dim=1).cpu(), self.full_labels.cpu()).item()
             auroc = self.AUROC(self.full_preds.cpu(), self.full_labels.cpu()).item()
+            print("Preds:", preds.numpy())
+            print("Labels:", labels.numy())
             return acc, f1, auroc
 
 
