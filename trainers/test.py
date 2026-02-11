@@ -147,7 +147,7 @@ class TargetTest(AbstractTrainer):
             ss_tot = ((labels - labels.mean()) ** 2).sum()
             r2 = (1 - ss_res / ss_tot).item() if ss_tot > 0 else 0.0
             print("Preds:", preds.numpy())
-            print("Labels:", labels.numy())
+            print("Labels:", labels.numpy())
             return mse, mae, r2
             
         else:
