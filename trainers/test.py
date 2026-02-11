@@ -155,7 +155,7 @@ class TargetTest(AbstractTrainer):
             f1 = self.F1(self.full_preds.argmax(dim=1).cpu(), self.full_labels.cpu()).item()
             auroc = self.AUROC(self.full_preds.cpu(), self.full_labels.cpu()).item()
             print("Preds:", preds.numpy())
-            print("Labels:", labels.numy())
+            print("Labels:", labels.numpy())
             return acc, f1, auroc
 
 
