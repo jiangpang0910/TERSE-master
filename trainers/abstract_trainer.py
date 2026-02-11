@@ -180,7 +180,7 @@ class AbstractTrainer(object):
             "last": last_model,
             "best": best_model
         }
-        # save report
+        # save classification report
         save_path = os.path.join(home_path, log_dir, f"checkpoint.pt")
         torch.save(save_dict, save_path)
 
