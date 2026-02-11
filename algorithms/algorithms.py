@@ -145,7 +145,7 @@ class TERSE(Algorithm):
 
     def update(self, trg_dataloader, avg_meter, logger):
         # defining best and last model
-        best_adapt_risk = float('inf')
+        best_adapt_loss = float('inf')  
         best_model = self.network.state_dict()
         last_model = self.network.state_dict()
 
