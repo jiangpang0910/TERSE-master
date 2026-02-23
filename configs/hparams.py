@@ -51,7 +51,7 @@ class SENSE_42():
         super(SENSE_42, self).__init__()
         self.train_params = {
             'num_epochs': 60,
-            'batch_size': 32,
+            'batch_size': 128,
             'weight_decay': 1e-4,
             'step_size': 50,
             'lr_decay': 0.5

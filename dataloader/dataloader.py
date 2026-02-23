@@ -68,6 +68,7 @@ def data_generator(data_path, domain_id, dataset_configs, hparams, dtype):
                                               batch_size=hparams["batch_size"],
                                               shuffle=shuffle,
                                               drop_last=drop_last,
-                                              num_workers=0)
+                                              num_workers=4,
+                                              pin_memory=True)
 
     return data_loader
