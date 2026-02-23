@@ -2,14 +2,8 @@
 __pycache__/
 *.pyc
 
-# Data files (too large for git - regenerate with preprocess_HAR.py)
-data/HAR/train/*.txt
-data/HAR/test/*.txt
-data/HAR/train/Inertial Signals/
-data/HAR/test/Inertial Signals/
-data/HAR/*.pt
-data/sense42_raw_eeg_extracted_rawonly/
-data/sense_42/
+# Data files (too large for git)
+data/
 
 # Experiment logs
 experiments_logs/

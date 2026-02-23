@@ -93,30 +93,26 @@ class TERSE(Algorithm):
                 self.pre_optimizer.zero_grad()
                 self.recover_optimizer.zero_grad()
 
-                ### raw data ###
+         
                 src_temp_feat = self.feature_extractor.temporal_cnn(src_x)  # 1. extract temporal features.
                 src_adj = self.feature_extractor.graph_learner(src_temp_feat)  # 2. graph structure learning.
                 src_feat, src_flat = self.feature_extractor.spatial_gnn(src_temp_feat, src_adj)  # 3. extract spatial features.
 
-                ### masked data ###
                 masked_src_x, _ = masking2(src_x, num_splits=8, num_masked=1)  # 4. masking the raw features.
                 masked_feat, masked_flat = self.feature_extractor(masked_src_x) # 5. extract masked features.
                 masked_adj = mask_adj_matrices_edges(src_adj, mask_ratio=self.hparams['gmask_ratio'])  # 7. masking edges.
 
-                ### 1. masked raw features recover loss. ###
                 src_recovered_temp_feat = self.temporal_verifier(masked_feat.detach())
                 tov_loss = self.mse_loss(src_recovered_temp_feat, src_feat)
 
-                ### 3. masked graph recover loss. ###
+        
                 src_masked_adj_feat, _ = self.feature_extractor.spatial_gnn(src_temp_feat, masked_adj)
                 src_recovered_graph = self.graph_recover(src_masked_adj_feat.detach(), masked_adj.detach())  # use clearn feats and masked graphs
                 graph_recover_loss = self.mse_loss(src_recovered_graph, src_adj)
 
-                # 7. classifier predictions
+            
                 src_pred = self.classifier(src_flat)
 
-                # 8. normal cross entropy
-                # 8. supervised loss
                 if getattr(self.configs, 'task', 'classification') == 'regression':
                     src_loss = self.regression_loss(src_pred, src_y)
                 else:
