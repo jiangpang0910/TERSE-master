@@ -157,7 +157,11 @@ class SENSE_42():
     def __init__(self):
         super(SENSE_42, self).__init__()
         # Domain adaptation scenarios: (source_participant, target_participant)
-        self.scenarios = [("1", "10"), ("2", "8"), ("3", "5"), ("4", "9"), ("6", "11")]
+        # Source: persons 1-16 (pretrain), Target: persons 17-24 (adapt & evaluate)
+        self.scenarios = [
+            ("1", "17"), ("3", "18"), ("5", "19"), ("7", "20"),
+            ("9", "21"), ("11", "22"), ("13", "23"), ("15", "24"),
+        ]
 
         self.class_names = ['low', 'medium', 'high']
         self.sequence_len = 512   # ~0.5s windows at 1024 Hz (good for EEG workload)

@@ -168,7 +168,7 @@ if __name__ == "__main__":
     parser.add_argument('--da_method', default='TERSE', type=str, help='')
 
     # ========= Select the DATASET ==============
-    parser.add_argument('--data_path', default=r'/Datasets', type=str, help='Path containing dataset')
+    parser.add_argument('--data_path', default=r'./data', type=str, help='Path containing dataset')
     parser.add_argument('--dataset', default='HAR', type=str, help='Datasets')
 
     # ========= Select the BACKBONE ==============
