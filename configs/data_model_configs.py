@@ -156,6 +156,7 @@ class SENSE_42():
     """
     def __init__(self):
         super(SENSE_42, self).__init__()
+        self.data_dir = 'load_data_sense_42'
         # Domain adaptation scenarios: (source_participant, target_participant)
         # Source: persons 1-16 (pretrain), Target: persons 17-24 (adapt & evaluate)
         self.scenarios = [

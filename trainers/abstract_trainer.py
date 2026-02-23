@@ -40,7 +40,8 @@ class AbstractTrainer(object):
         _trainers_dir = os.path.dirname(os.path.abspath(__file__))
         self.home_path = os.path.dirname(_trainers_dir)
         self.save_dir = args.save_dir
-        self.data_path = os.path.join(args.data_path, self.dataset)
+        data_subdir = getattr(self.dataset_configs, 'data_dir', self.dataset)
+        self.data_path = os.path.join(args.data_path, data_subdir)
 
         # Specify runs
         self.num_runs = args.num_runs
