@@ -40,14 +40,16 @@ class AbstractTrainer(object):
         _trainers_dir = os.path.dirname(os.path.abspath(__file__))
         self.home_path = os.path.dirname(_trainers_dir)
         self.save_dir = args.save_dir
-        data_subdir = getattr(self.dataset_configs, 'data_dir', self.dataset)
-        self.data_path = os.path.join(args.data_path, data_subdir)
 
         # Specify runs
         self.num_runs = args.num_runs
 
         # get dataset and base model configs
         self.dataset_configs, self.hparams_class = self.get_configs()
+
+        # data path (must come after get_configs so dataset_configs exists)
+        data_subdir = getattr(self.dataset_configs, 'data_dir', self.dataset)
+        self.data_path = os.path.join(args.data_path, data_subdir)
 
         # to fix dimension of features in classifier and discriminator networks.
         self.dataset_configs.final_out_channels = self.dataset_configs.tcn_final_out_channles if args.backbone == "TCN" else self.dataset_configs.final_out_channels
