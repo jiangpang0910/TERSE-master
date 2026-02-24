@@ -32,6 +32,11 @@ class TargetTest(AbstractTrainer):
 
         self.last_results = None
         self.best_results = None
+        self.use_kfold = getattr(args, "use_kfold", False)
+        self.num_folds = getattr(args, "num_folds", 5)
+        self.kfold_ensemble = getattr(args, "kfold_ensemble", False)
+        if self.use_kfold and self.num_folds < 2:
+            raise ValueError("num_folds must be >= 2 when --use_kfold is enabled.")
         self.exp_log_dir = os.path.join(self.home_path, self.save_dir, self.experiment_description,
                                         self.run_description)
 
@@ -49,53 +54,146 @@ class TargetTest(AbstractTrainer):
 
         return algorithm_class(backbone_fe, self.dataset_configs, self.hparams, self.device).to(self.device)
 
+    def _checkpoint_dir(self, src_id, trg_id, run_id, fold_id=None):
+        if fold_id is None:
+            return os.path.join(self.exp_log_dir, f"{src_id}_to_{trg_id}_run_{run_id}")
+        return os.path.join(self.exp_log_dir, f"{src_id}_to_{trg_id}_run_{run_id}_fold_{fold_id}")
+
+    def _append_kfold_result(self, table, scenario, run_id, fold_id, metrics):
+        row = [scenario, run_id, fold_id, *metrics]
+        row_df = pd.DataFrame([row], columns=table.columns)
+        return pd.concat([table, row_df], ignore_index=True)
+
+    def _summarize_kfold_run_stats(self, table, metric_names):
+        grouped = table.groupby(["scenario", "run"])[metric_names].agg(["mean", "std"]).reset_index()
+        grouped.columns = ["scenario", "run"] + [f"{m}_{stat}" for m in metric_names for stat in ("mean", "std")]
+        return grouped
+
     def scenario_test(self):
         # Define columns for results tables
         if self.task == "regression":
             results_columns = ["scenario", "run", "mse", "mae", "r2"]
         else:
             results_columns = ["scenario", "run", "acc", "f1_score", "auroc"]
+        metric_names = results_columns[2:]
 
         # Initialize results tables
         last_results = pd.DataFrame(columns=results_columns)
         best_results = pd.DataFrame(columns=results_columns)
         non_adapted_results = pd.DataFrame(columns=results_columns)
 
-        # Train and test models for each scenario and run
-        for src_id, trg_id in self.dataset_configs.scenarios:
-            cur_scenarios_f1_score = []
-            for run_id in range(self.num_runs):
-                # Fix random seed and set up logging directory
-                fix_randomness(run_id)
-                self.scenario_log_dir = os.path.join(self.exp_log_dir, src_id + "_to_" + trg_id + "_run_" + str(run_id))
+        if not self.use_kfold:
+            # Evaluate models for each scenario and run (original behavior).
+            for src_id, trg_id in self.dataset_configs.scenarios:
+                for run_id in range(self.num_runs):
+                    fix_randomness(run_id)
+                    self.scenario_log_dir = self._checkpoint_dir(src_id, trg_id, run_id)
 
-                # Load data, build model, and load checkpoint
+                    self.load_data(src_id, trg_id)
+                    self.algorithm = self.build_model()
+                    non_adapted_last, adapted_last, adapted_best = self.load_checkpoint(self.scenario_log_dir)
+
+                    non_adapted_metrics = self.model_test(non_adapted_last)
+                    last_metrics = self.model_test(adapted_last)
+                    best_metrics = self.model_test(adapted_best)
+                    scenario_name = f"{src_id}_to_{trg_id}"
+                    non_adapted_results = self.append_results_to_tables(non_adapted_results, scenario_name, run_id, non_adapted_metrics)
+                    last_results = self.append_results_to_tables(last_results, scenario_name, run_id, last_metrics)
+                    best_results = self.append_results_to_tables(best_results, scenario_name, run_id, best_metrics)
+
+            summary_src_only = non_adapted_results[metric_names].mean()
+            summary_last = last_results[metric_names].mean()
+            summary_best = best_results[metric_names].mean()
+            for summary_name, summary in [('src_only', summary_src_only), ('Last', summary_last), ('Best', summary_best)]:
+                for key, val in summary.items():
+                    print(f'{summary_name}: {key}\t: {val:2.4f}')
+
+            last_results = self.add_mean_std_table(last_results, results_columns)
+            best_results = self.add_mean_std_table(best_results, results_columns)
+            self.save_tables_to_file(last_results, 'last_results')
+            self.save_tables_to_file(best_results, 'best_results')
+            return
+
+        # K-Fold evaluation mode: save fold-level rows and run-level aggregates.
+        kfold_columns = ["scenario", "run", "fold", *metric_names]
+        last_fold_results = pd.DataFrame(columns=kfold_columns)
+        best_fold_results = pd.DataFrame(columns=kfold_columns)
+        src_only_fold_results = pd.DataFrame(columns=kfold_columns)
+
+        for src_id, trg_id in self.dataset_configs.scenarios:
+            scenario_name = f"{src_id}_to_{trg_id}"
+            for run_id in range(self.num_runs):
+                fix_randomness(run_id)
                 self.load_data(src_id, trg_id)
                 self.algorithm = self.build_model()
-                non_adapted_last, adapted_last, adapted_best = self.load_checkpoint(self.scenario_log_dir)
 
-                # Test models and append results to tables
-                non_adapted_metrics = self.model_test(non_adapted_last)
-                last_metrics = self.model_test(adapted_last)
-                best_metrics = self.model_test(adapted_best)
-                non_adapted_results = self.append_results_to_tables(non_adapted_results, f"{src_id}_to_{trg_id}", run_id, non_adapted_metrics)
-                last_results = self.append_results_to_tables(last_results, f"{src_id}_to_{trg_id}", run_id, last_metrics)
-                best_results = self.append_results_to_tables(best_results, f"{src_id}_to_{trg_id}", run_id, best_metrics)
+                non_adapted_ckpts, last_ckpts, best_ckpts = [], [], []
+                for fold_id in range(self.num_folds):
+                    self.scenario_log_dir = self._checkpoint_dir(src_id, trg_id, run_id, fold_id)
+                    non_adapted_ckpt, adapted_last_ckpt, adapted_best_ckpt = self.load_checkpoint(self.scenario_log_dir)
 
-                cur_scenarios_f1_score.append(last_metrics[1])
-        # Calculate mean and std of each metric for each scenario and print results
-        summary_src_only = non_adapted_results[results_columns[2:]].mean()
-        summary_last = last_results[results_columns[2:]].mean()
-        summary_best = best_results[results_columns[2:]].mean()
-        for summary_name, summary in [('src_only', summary_src_only), ('Last', summary_last), ('Best', summary_best)]:
-            for key, val in summary.items():
-                print(f'{summary_name}: {key}\t: {val:2.4f}')
+                    non_adapted_ckpts.append(non_adapted_ckpt)
+                    last_ckpts.append(adapted_last_ckpt)
+                    best_ckpts.append(adapted_best_ckpt)
 
-        # Add mean and std tables to results tables and save to file
-        last_results = self.add_mean_std_table(last_results, results_columns)
-        best_results = self.add_mean_std_table(best_results, results_columns)
-        self.save_tables_to_file(last_results, 'last_results')
-        self.save_tables_to_file(best_results, 'best_results')
+                    src_metrics = self.model_test(non_adapted_ckpt)
+                    last_metrics = self.model_test(adapted_last_ckpt)
+                    best_metrics = self.model_test(adapted_best_ckpt)
+
+                    src_only_fold_results = self._append_kfold_result(src_only_fold_results, scenario_name, run_id, fold_id, src_metrics)
+                    last_fold_results = self._append_kfold_result(last_fold_results, scenario_name, run_id, fold_id, last_metrics)
+                    best_fold_results = self._append_kfold_result(best_fold_results, scenario_name, run_id, fold_id, best_metrics)
+
+                if self.kfold_ensemble:
+                    src_ens_metrics = self.model_test_ensemble(non_adapted_ckpts)
+                    last_ens_metrics = self.model_test_ensemble(last_ckpts)
+                    best_ens_metrics = self.model_test_ensemble(best_ckpts)
+                    src_only_fold_results = self._append_kfold_result(
+                        src_only_fold_results, scenario_name, run_id, "ensemble", src_ens_metrics
+                    )
+                    last_fold_results = self._append_kfold_result(
+                        last_fold_results, scenario_name, run_id, "ensemble", last_ens_metrics
+                    )
+                    best_fold_results = self._append_kfold_result(
+                        best_fold_results, scenario_name, run_id, "ensemble", best_ens_metrics
+                    )
+
+        # Save fold-level outputs.
+        self.save_tables_to_file(src_only_fold_results, 'src_only_results_folds')
+        self.save_tables_to_file(last_fold_results, 'last_results_folds')
+        self.save_tables_to_file(best_fold_results, 'best_results_folds')
+
+        # Save per-run fold mean/std outputs (excluding optional ensemble rows).
+        src_only_non_ens = src_only_fold_results[src_only_fold_results["fold"] != "ensemble"].copy()
+        last_non_ens = last_fold_results[last_fold_results["fold"] != "ensemble"].copy()
+        best_non_ens = best_fold_results[best_fold_results["fold"] != "ensemble"].copy()
+
+        src_only_run_stats = self._summarize_kfold_run_stats(src_only_non_ens, metric_names)
+        last_run_stats = self._summarize_kfold_run_stats(last_non_ens, metric_names)
+        best_run_stats = self._summarize_kfold_run_stats(best_non_ens, metric_names)
+        self.save_tables_to_file(src_only_run_stats, 'src_only_results_run_fold_stats')
+        self.save_tables_to_file(last_run_stats, 'last_results_run_fold_stats')
+        self.save_tables_to_file(best_run_stats, 'best_results_run_fold_stats')
+
+        # Backward-compatible summary files: mean across folds per (scenario, run) + overall mean/std.
+        src_only_mean = src_only_non_ens.groupby(["scenario", "run"], as_index=False)[metric_names].mean()
+        last_mean = last_non_ens.groupby(["scenario", "run"], as_index=False)[metric_names].mean()
+        best_mean = best_non_ens.groupby(["scenario", "run"], as_index=False)[metric_names].mean()
+
+        src_only_summary = self.add_mean_std_table(src_only_mean[results_columns].copy(), results_columns)
+        last_summary = self.add_mean_std_table(last_mean[results_columns].copy(), results_columns)
+        best_summary = self.add_mean_std_table(best_mean[results_columns].copy(), results_columns)
+        self.save_tables_to_file(src_only_summary, 'src_only_results')
+        self.save_tables_to_file(last_summary, 'last_results')
+        self.save_tables_to_file(best_summary, 'best_results')
+
+        if self.kfold_ensemble:
+            src_only_ensemble = src_only_fold_results[src_only_fold_results["fold"] == "ensemble"].copy()
+            last_ensemble = last_fold_results[last_fold_results["fold"] == "ensemble"].copy()
+            best_ensemble = best_fold_results[best_fold_results["fold"] == "ensemble"].copy()
+            self.save_tables_to_file(src_only_ensemble, 'src_only_results_ensemble')
+            self.save_tables_to_file(last_ensemble, 'last_results_ensemble')
+            self.save_tables_to_file(best_ensemble, 'best_results_ensemble')
 
 
     def model_test(self, chkpoint):
@@ -122,13 +220,13 @@ class TargetTest(AbstractTrainer):
                 predictions = classifier(feats)
 
                 # compute loss
-                # compute loss
                 if self.task == "regression":
+                    predictions = predictions.view((-1))
                     loss = F.mse_loss(predictions, labels)
                 else:
                     loss = F.cross_entropy(predictions, labels)
                 total_loss.append(loss.item())
-                pred = predictions.detach()  # .argmax(dim=1)  # get the index of the max log-probability
+                pred = predictions.detach()
 
                 # append predictions and labels
                 preds_list.append(pred)
@@ -146,17 +244,58 @@ class TargetTest(AbstractTrainer):
             ss_res = ((labels - preds) ** 2).sum()
             ss_tot = ((labels - labels.mean()) ** 2).sum()
             r2 = (1 - ss_res / ss_tot).item() if ss_tot > 0 else 0.0
-            print("Preds:", preds.numpy())
-            print("Labels:", labels.numpy())
             return mse, mae, r2
-            
-        else:
-            acc = self.ACC(self.full_preds.argmax(dim=1).cpu(), self.full_labels.cpu()).item()
-            f1 = self.F1(self.full_preds.argmax(dim=1).cpu(), self.full_labels.cpu()).item()
-            auroc = self.AUROC(self.full_preds.cpu(), self.full_labels.cpu()).item()
-            print("Preds:", preds.numpy())
-            print("Labels:", labels.numpy())
-            return acc, f1, auroc
+
+        acc = self.ACC(self.full_preds.argmax(dim=1).cpu(), self.full_labels.cpu()).item()
+        f1 = self.F1(self.full_preds.argmax(dim=1).cpu(), self.full_labels.cpu()).item()
+        auroc = self.AUROC(self.full_preds.cpu(), self.full_labels.cpu()).item()
+        return acc, f1, auroc
+
+    def model_test_ensemble(self, checkpoints):
+        feature_extractor = self.algorithm.feature_extractor.to(self.device)
+        classifier = self.algorithm.classifier.to(self.device)
+        feature_extractor.eval()
+        classifier.eval()
+
+        preds_list, labels_list = [], []
+        with torch.no_grad():
+            for data, labels, _ in self.trg_test_dl:
+                data = data.float().to(self.device)
+                if self.task == "regression":
+                    labels = labels.view((-1)).float().to(self.device)
+                else:
+                    labels = labels.view((-1)).long().to(self.device)
+
+                fold_outputs = []
+                for chkpoint in checkpoints:
+                    self.algorithm.network.load_state_dict(chkpoint)
+                    _, feats = feature_extractor(data)
+                    pred = classifier(feats)
+                    if self.task == "regression":
+                        fold_outputs.append(pred.view((-1)))
+                    else:
+                        fold_outputs.append(F.softmax(pred, dim=1))
+
+                mean_pred = torch.stack(fold_outputs, dim=0).mean(dim=0)
+                preds_list.append(mean_pred.detach())
+                labels_list.append(labels)
+
+        full_preds = torch.cat(preds_list)
+        full_labels = torch.cat(labels_list)
+        if self.task == "regression":
+            preds = full_preds.cpu()
+            labels = full_labels.cpu()
+            mse = F.mse_loss(preds, labels).item()
+            mae = F.l1_loss(preds, labels).item()
+            ss_res = ((labels - preds) ** 2).sum()
+            ss_tot = ((labels - labels.mean()) ** 2).sum()
+            r2 = (1 - ss_res / ss_tot).item() if ss_tot > 0 else 0.0
+            return mse, mae, r2
+
+        acc = self.ACC(full_preds.argmax(dim=1).cpu(), full_labels.cpu()).item()
+        f1 = self.F1(full_preds.argmax(dim=1).cpu(), full_labels.cpu()).item()
+        auroc = self.AUROC(full_preds.cpu(), full_labels.cpu()).item()
+        return acc, f1, auroc
 
 
 if __name__ == "__main__":
@@ -178,6 +317,10 @@ if __name__ == "__main__":
     parser.add_argument('--num_runs', default=3, type=int, help='Number of consecutive run with different seeds')
     parser.add_argument('--device', default="cuda", type=str, help='cpu or cuda')
     parser.add_argument('--gpu_id', default=0, type=str, help='gpu id.')
+    parser.add_argument('--use_kfold', action='store_true', help='Load and aggregate fold checkpoints.')
+    parser.add_argument('--num_folds', default=5, type=int, help='Number of folds when --use_kfold is enabled.')
+    parser.add_argument('--kfold_ensemble', action='store_true',
+                        help='Also evaluate ensemble predictions by averaging fold outputs.')
 
     args = parser.parse_args()
 
